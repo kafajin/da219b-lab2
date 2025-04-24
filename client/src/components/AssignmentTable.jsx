@@ -1,71 +1,97 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-const AssignmentTable = () => {
+export default function AssignmentTable() {
   const [assignments, setAssignments] = useState([]);
-  const [sortBy, setSortBy] = useState("start_date");
-  const [ascending, setAscending] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
-  const fetchData = async () => {
-    try {
-      const res = await fetch("http://localhost:5000/api/project_assignments");
-      const data = await res.json();
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const res = await fetch(
+          "http://localhost:5000/api/project_assignments"
+        );
+        const data = await res.json();
+        setAssignments(data.slice(-5)); // latest 5
+      } catch (err) {
+        console.error("Failed to fetch assignments:", err);
+      }
+    };
 
-      const sorted = [...data].sort((a, b) => {
-        const aVal =
-          a[sortBy]?.full_name || a[sortBy]?.project_name || a[sortBy] || "";
-        const bVal =
-          b[sortBy]?.full_name || b[sortBy]?.project_name || b[sortBy] || "";
-        return ascending
-          ? String(aVal).localeCompare(String(bVal))
-          : String(bVal).localeCompare(String(aVal));
-      });
+    fetchAssignments();
+    const interval = setInterval(fetchAssignments, 60000); // refresh every minute
+    return () => clearInterval(interval);
+  }, []);
 
-      setAssignments(sorted.slice(0, 5));
-    } catch (error) {
-      console.error("Failed to fetch assignments:", error);
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortValue = (assignment, key) => {
+    switch (key) {
+      case "employee_id":
+        return assignment.employee_id?.employee_id || "";
+      case "employee_name":
+        return assignment.employee_id?.full_name || "";
+      case "project_name":
+        return assignment.project_code?.project_name || "";
+      case "start_date":
+        return assignment.start_date || "";
+      default:
+        return "";
     }
   };
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // refresh every 60s
-    return () => clearInterval(interval);
-  }, [sortBy, ascending]);
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const aVal = getSortValue(a, sortConfig.key);
+    const bVal = getSortValue(b, sortConfig.key);
+    return sortConfig.direction === "asc"
+      ? aVal.localeCompare(bVal)
+      : bVal.localeCompare(aVal);
+  });
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      setAscending(!ascending);
-    } else {
-      setSortBy(field);
-      setAscending(true);
+  const sortArrow = (key) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === "asc" ? " ↑" : " ↓";
     }
+    return "";
   };
 
   return (
     <div>
-      <h2>Latest Project Assignments</h2>
+      <h2 style={{ marginBottom: "1rem" }}>Latest Project Assignments</h2>
       <table>
         <thead>
           <tr>
-            <th onClick={() => handleSort("employee_id")}>Employee ID</th>
-            <th onClick={() => handleSort("employee_name")}>Employee Name</th>
-            <th onClick={() => handleSort("project_name")}>Project Name</th>
-            <th onClick={() => handleSort("start_date")}>Start Date</th>
+            <th onClick={() => handleSort("employee_id")}>
+              Employee ID{sortArrow("employee_id")}
+            </th>
+            <th onClick={() => handleSort("employee_name")}>
+              Employee Name{sortArrow("employee_name")}
+            </th>
+            <th onClick={() => handleSort("project_name")}>
+              Project Name{sortArrow("project_name")}
+            </th>
+            <th onClick={() => handleSort("start_date")}>
+              Start Date{sortArrow("start_date")}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {assignments.map((a, idx) => (
+          {sortedAssignments.map((assignment, idx) => (
             <tr key={idx}>
-              <td>{a.employee_id?.employee_id}</td>
-              <td>{a.employee_id?.full_name}</td>
-              <td>{a.project_code?.project_name}</td>
-              <td>{new Date(a.start_date).toLocaleDateString()}</td>
+              <td>{assignment.employee_id?.employee_id}</td>
+              <td>{assignment.employee_id?.full_name}</td>
+              <td>{assignment.project_code?.project_name}</td>
+              <td>{assignment.start_date?.slice(0, 10)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
-};
-
-export default AssignmentTable;
+}
